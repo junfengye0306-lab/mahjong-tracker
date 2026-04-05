@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="麻将记账">
-  <title>麻将记账</title>
+  <meta name="apple-mobile-web-app-title" content="赢了吗">
+  <title>赢了吗🀄</title>
   <link rel="manifest" href="manifest.json">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
@@ -236,6 +236,35 @@
     }
     .form-group input:focus { border-color: #667eea; }
     .amount-hint { font-size: 12px; color: #888; margin-top: 4px; }
+
+    /* Win/Lose selector */
+    .wl-selector { display: flex; gap: 10px; margin-bottom: 16px; }
+    .wl-btn {
+      flex: 1;
+      padding: 18px 10px;
+      border: 2.5px solid #eee;
+      border-radius: 14px;
+      background: #fff;
+      font-size: 28px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+      line-height: 1.2;
+    }
+    .wl-btn .wl-emoji { display: block; font-size: 32px; }
+    .wl-btn .wl-label { display: block; font-size: 13px; font-weight: 600; margin-top: 4px; color: #888; }
+    .wl-btn.selected-win {
+      border-color: #22c55e;
+      background: #f0fdf4;
+    }
+    .wl-btn.selected-win .wl-label { color: #22c55e; }
+    .wl-btn.selected-lose {
+      border-color: #ef4444;
+      background: #fff5f5;
+    }
+    .wl-btn.selected-lose .wl-label { color: #ef4444; }
+    .amount-step { display: none; }
+    .amount-step.visible { display: block; }
     .modal-btns { display: flex; gap: 10px; margin-top: 20px; }
     .btn-cancel {
       flex: 1;
@@ -265,7 +294,7 @@
 <!-- Page: Records -->
 <div id="page-records" class="page active">
   <div class="header">
-    <h1>麻将记账</h1>
+    <h1>赢了吗 🀄</h1>
     <div class="subtitle" id="header-subtitle">本月收支</div>
   </div>
   <div class="summary-card" id="summary-card">
@@ -371,16 +400,32 @@
 <!-- Add Record Modal -->
 <div class="modal-overlay" id="modal" onclick="closeModalOutside(event)">
   <div class="modal">
-    <h2>新增记录</h2>
+    <h2 id="modal-title">今天运气怎么样？</h2>
     <div class="form-group">
       <label>日期</label>
       <input type="date" id="input-date">
     </div>
-    <div class="form-group">
-      <label>金额</label>
-      <input type="number" id="input-amount" placeholder="赢钱填正数，输钱填负数" inputmode="numeric">
-      <div class="amount-hint">例：赢了150填 150，输了80填 -80</div>
+
+    <!-- Step 1: 选赢/输 -->
+    <div class="wl-selector">
+      <button class="wl-btn" id="btn-win" onclick="selectWL('win')">
+        <span class="wl-emoji">🤑</span>
+        <span class="wl-label">赢了！</span>
+      </button>
+      <button class="wl-btn" id="btn-lose" onclick="selectWL('lose')">
+        <span class="wl-emoji">😭</span>
+        <span class="wl-label">输了...</span>
+      </button>
     </div>
+
+    <!-- Step 2: 输入金额（选完才出现） -->
+    <div class="amount-step" id="amount-step">
+      <div class="form-group">
+        <label id="amount-label">赢了多少？</label>
+        <input type="number" id="input-amount" placeholder="输入金额（整数）" inputmode="numeric" min="1">
+      </div>
+    </div>
+
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeModal()">取消</button>
       <button class="btn-save" onclick="saveRecord()">保存</button>
@@ -459,12 +504,36 @@ function deleteRecord(id) {
 }
 
 // ---- Modal ----
+let selectedWL = null; // 'win' or 'lose'
+
 function openModal() {
+  selectedWL = null;
   document.getElementById('input-date').value = new Date().toISOString().slice(0, 10);
   document.getElementById('input-amount').value = '';
+  document.getElementById('btn-win').className = 'wl-btn';
+  document.getElementById('btn-lose').className = 'wl-btn';
+  document.getElementById('amount-step').classList.remove('visible');
+  document.getElementById('modal-title').textContent = '今天运气怎么样？';
   document.getElementById('modal').classList.add('open');
-  setTimeout(() => document.getElementById('input-amount').focus(), 300);
 }
+
+function selectWL(type) {
+  selectedWL = type;
+  if (type === 'win') {
+    document.getElementById('btn-win').className = 'wl-btn selected-win';
+    document.getElementById('btn-lose').className = 'wl-btn';
+    document.getElementById('modal-title').textContent = '🤑 赢麻了！赢了多少？';
+    document.getElementById('amount-label').textContent = '赢了多少？';
+  } else {
+    document.getElementById('btn-win').className = 'wl-btn';
+    document.getElementById('btn-lose').className = 'wl-btn selected-lose';
+    document.getElementById('modal-title').textContent = '😭 输了...输了多少？';
+    document.getElementById('amount-label').textContent = '输了多少？';
+  }
+  document.getElementById('amount-step').classList.add('visible');
+  setTimeout(() => document.getElementById('input-amount').focus(), 100);
+}
+
 function closeModal() {
   document.getElementById('modal').classList.remove('open');
 }
@@ -473,11 +542,13 @@ function closeModalOutside(e) {
 }
 function saveRecord() {
   const date = document.getElementById('input-date').value;
-  const amountStr = document.getElementById('input-amount').value.trim();
   if (!date) { alert('请选择日期'); return; }
-  if (amountStr === '' || isNaN(amountStr)) { alert('请输入有效金额'); return; }
-  const amount = parseInt(amountStr, 10);
-  if (amount === 0) { alert('金额不能为0'); return; }
+  if (!selectedWL) { alert('请先选择赢了还是输了'); return; }
+  const amountStr = document.getElementById('input-amount').value.trim();
+  if (amountStr === '' || isNaN(amountStr) || parseInt(amountStr) <= 0) {
+    alert('请输入大于0的金额'); return;
+  }
+  const amount = selectedWL === 'win' ? parseInt(amountStr) : -parseInt(amountStr);
   const records = getRecords();
   records.push({ id: genId(), date, amount });
   saveRecords(records);
