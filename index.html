@@ -183,6 +183,46 @@
     }
     .chart-container canvas { max-height: 220px; }
 
+    /* Calendar */
+    .calendar-container {
+      background: #fff;
+      margin: 0 16px 16px;
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .calendar-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #555;
+      margin-bottom: 12px;
+    }
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+    }
+    .cal-header {
+      text-align: center;
+      font-size: 11px;
+      color: #aaa;
+      padding: 2px 0 6px;
+      font-weight: 600;
+    }
+    .cal-day {
+      aspect-ratio: 1;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 500;
+      color: #ccc;
+      background: #f9f9f9;
+    }
+    .cal-day.win { background: #dcfce7; color: #16a34a; }
+    .cal-day.lose { background: #fee2e2; color: #dc2626; }
+    .cal-day.today { outline: 2px solid #667eea; outline-offset: -2px; }
+
     /* Settings page */
     .settings-section {
       margin: 16px;
@@ -326,12 +366,8 @@
       <div class="s-value neutral" id="stat-net">¥0</div>
     </div>
     <div class="stat-card">
-      <div class="s-label">总局数</div>
-      <div class="s-value neutral" id="stat-games">0</div>
-    </div>
-    <div class="stat-card">
-      <div class="s-label">赢钱局数</div>
-      <div class="s-value win" id="stat-wins">0</div>
+      <div class="s-label">赢钱天数</div>
+      <div class="s-value win" id="stat-wins">0 天</div>
     </div>
     <div class="stat-card">
       <div class="s-label">胜率</div>
@@ -342,13 +378,18 @@
       <div class="s-value win" id="stat-maxwin">¥0</div>
     </div>
     <div class="stat-card">
-      <div class="s-label">最大单次输</div>
-      <div class="s-value lose" id="stat-maxlose">¥0</div>
+      <div class="s-label">最长连赢</div>
+      <div class="s-value win" id="stat-streak-win">0 天</div>
+    </div>
+    <div class="stat-card">
+      <div class="s-label">最长连输</div>
+      <div class="s-value lose" id="stat-streak-lose">0 天</div>
     </div>
   </div>
   <div class="chart-container">
     <canvas id="myChart"></canvas>
   </div>
+  <div class="calendar-container" id="calendar-container"></div>
 </div>
 
 <!-- Page: Settings -->
@@ -585,24 +626,78 @@ function getFilteredRecords(period) {
   });
 }
 
+function calcStreaks(records) {
+  const sorted = [...records].sort((a, b) => a.date.localeCompare(b.date));
+  let maxWin = 0, maxLose = 0, curWin = 0, curLose = 0;
+  sorted.forEach(r => {
+    if (r.amount > 0) { curWin++; curLose = 0; maxWin = Math.max(maxWin, curWin); }
+    else { curLose++; curWin = 0; maxLose = Math.max(maxLose, curLose); }
+  });
+  return { maxWin, maxLose };
+}
+
 function renderStats() {
   const records = getFilteredRecords(currentPeriod);
   const net = records.reduce((s, r) => s + r.amount, 0);
   const wins = records.filter(r => r.amount > 0);
   const loses = records.filter(r => r.amount < 0);
-  const winrate = records.length ? Math.round(wins.length / records.length * 100) : 0;
-  const maxWin = wins.length ? Math.max(...wins.map(r => r.amount)) : 0;
-  const maxLose = loses.length ? Math.min(...loses.map(r => r.amount)) : 0;
+  // 按天去重计算赢钱天数
+  const winDays = new Set(wins.map(r => r.date)).size;
+  const totalDays = new Set(records.map(r => r.date)).size;
+  const winrate = totalDays ? Math.round(winDays / totalDays * 100) : 0;
+  const maxWinAmt = wins.length ? Math.max(...wins.map(r => r.amount)) : 0;
+  const { maxWin: streakWin, maxLose: streakLose } = calcStreaks(records);
 
   document.getElementById('stat-net').textContent = formatAmount(net);
   document.getElementById('stat-net').className = 's-value ' + (net > 0 ? 'win' : net < 0 ? 'lose' : 'neutral');
-  document.getElementById('stat-games').textContent = records.length;
-  document.getElementById('stat-wins').textContent = wins.length;
+  document.getElementById('stat-wins').textContent = winDays + ' 天';
   document.getElementById('stat-winrate').textContent = winrate + '%';
-  document.getElementById('stat-maxwin').textContent = '¥' + maxWin;
-  document.getElementById('stat-maxlose').textContent = maxLose < 0 ? '-¥' + Math.abs(maxLose) : '¥0';
+  document.getElementById('stat-maxwin').textContent = '¥' + maxWinAmt;
+  document.getElementById('stat-streak-win').textContent = streakWin + ' 天';
+  document.getElementById('stat-streak-lose').textContent = streakLose + ' 天';
 
   renderChart(records);
+  renderCalendar();
+}
+
+function renderCalendar() {
+  const container = document.getElementById('calendar-container');
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const allRecords = getRecords();
+
+  // Build date->result map for this month
+  const dateMap = {};
+  allRecords.forEach(r => {
+    const d = new Date(r.date + 'T00:00:00');
+    if (d.getFullYear() === year && d.getMonth() === month) {
+      dateMap[r.date] = (dateMap[r.date] || 0) + r.amount;
+    }
+  });
+
+  const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayStr = now.toISOString().slice(0, 10);
+  const weekDays = ['日','一','二','三','四','五','六'];
+
+  let html = `<div class="calendar-title">${month + 1}月打牌记录</div><div class="calendar-grid">`;
+  weekDays.forEach(d => html += `<div class="cal-header">${d}</div>`);
+
+  // Empty cells before first day
+  for (let i = 0; i < firstDay; i++) html += `<div class="cal-day"></div>`;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const amt = dateMap[dateStr];
+    let cls = 'cal-day';
+    if (amt !== undefined) cls += amt >= 0 ? ' win' : ' lose';
+    if (dateStr === todayStr) cls += ' today';
+    html += `<div class="${cls}">${d}</div>`;
+  }
+
+  html += '</div>';
+  container.innerHTML = html;
 }
 
 function renderChart(records) {
