@@ -335,7 +335,7 @@
 <div id="page-records" class="page active">
   <div class="header">
     <h1>赢了吗 🀄</h1>
-    <div class="subtitle" id="header-subtitle">本月收支</div>
+    <div class="subtitle" id="header-subtitle"></div>
   </div>
   <div class="summary-card" id="summary-card">
     <div class="label">本月净收益</div>
@@ -428,13 +428,13 @@
 <!-- Bottom Nav -->
 <nav class="bottom-nav">
   <button class="nav-item active" id="nav-records" onclick="showPage('records')">
-    <span class="nav-icon">📋</span>记录
+    <span class="nav-icon">🀄</span>记录
   </button>
   <button class="nav-item" id="nav-stats" onclick="showPage('stats')">
-    <span class="nav-icon">📊</span>统计
+    <span class="nav-icon">🀇</span>统计
   </button>
   <button class="nav-item" id="nav-settings" onclick="showPage('settings')">
-    <span class="nav-icon">⚙️</span>设置
+    <span class="nav-icon">🎴</span>设置
   </button>
 </nav>
 
@@ -501,6 +501,32 @@ function showPage(page) {
   if (page === 'stats') renderStats();
 }
 
+// ---- Daily Quote ----
+const MJ_QUOTES = [
+  '今日手气旺，财运滚滚来',
+  '东风送好牌，赢钱不是梦',
+  '摸牌如有神，今日必大赢',
+  '牌运亨通，好运连连',
+  '天时地利人和，今日必胜',
+  '财神爷附体，赢钱停不下来',
+  '今日运势爆棚，出门必赢',
+  '好牌自天降，今日稳稳赢',
+  '手气如虹，横扫牌桌',
+  '今日宜打牌，大吉大利',
+  '运气来了挡不住，赢钱到手软',
+  '今日牌运昌隆，必有斩获',
+  '东南西北中，今日全都通',
+  '摸到好牌别客气，赢钱是正经',
+  '今日财星高照，牌桌大丰收',
+];
+function getDailyQuote() {
+  const day = new Date().toISOString().slice(0, 10);
+  // 用日期字符串生成稳定的索引，同一天始终同一句
+  let hash = 0;
+  for (let i = 0; i < day.length; i++) hash = (hash * 31 + day.charCodeAt(i)) & 0xffff;
+  return MJ_QUOTES[hash % MJ_QUOTES.length];
+}
+
 // ---- Records Page ----
 function renderRecords() {
   const records = getRecords();
@@ -513,9 +539,11 @@ function renderRecords() {
   const wins = monthRecords.filter(r => r.amount > 0).length;
   const winrate = monthRecords.length ? Math.round(wins / monthRecords.length * 100) : 0;
 
+  document.getElementById('header-subtitle').textContent = getDailyQuote();
   document.getElementById('month-total').textContent = formatAmount(total);
   document.getElementById('month-total').style.color = total >= 0 ? '#fff' : 'rgba(255,255,255,0.85)';
-  document.getElementById('month-games').textContent = monthRecords.length + ' 局';
+  const playDays = new Set(monthRecords.map(r => r.date)).size;
+  document.getElementById('month-games').textContent = playDays + ' 天';
   document.getElementById('month-winrate').textContent = '胜率 ' + winrate + '%';
 
   const sorted = [...records].sort((a, b) => b.date.localeCompare(a.date));
