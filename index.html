@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="麻将记账">
+  <title>麻将记账</title>
+  <link rel="manifest" href="manifest.json">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f5f5;
+      color: #333;
+      max-width: 480px;
+      margin: 0 auto;
+      min-height: 100vh;
+      padding-bottom: 70px;
+    }
+    /* Header */
+    .header {
+      background: #fff;
+      padding: 16px 20px 12px;
+      border-bottom: 1px solid #eee;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .header h1 { font-size: 20px; font-weight: 700; }
+    .header .subtitle { font-size: 13px; color: #888; margin-top: 2px; }
+
+    /* Summary card */
+    .summary-card {
+      margin: 16px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 16px;
+      padding: 20px;
+      color: #fff;
+    }
+    .summary-card .label { font-size: 13px; opacity: 0.85; }
+    .summary-card .amount { font-size: 36px; font-weight: 700; margin: 4px 0; }
+    .summary-card .meta { font-size: 13px; opacity: 0.85; display: flex; gap: 16px; }
+
+    /* Add button */
+    .add-btn {
+      display: block;
+      margin: 0 16px 16px;
+      background: #667eea;
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      padding: 14px;
+      font-size: 16px;
+      font-weight: 600;
+      width: calc(100% - 32px);
+      cursor: pointer;
+      text-align: center;
+    }
+    .add-btn:active { opacity: 0.85; }
+
+    /* Records list */
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #888;
+      padding: 0 16px 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .record-item {
+      background: #fff;
+      margin: 0 16px 8px;
+      border-radius: 12px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .record-date { font-size: 14px; color: #888; }
+    .record-amount { font-size: 20px; font-weight: 700; }
+    .record-amount.win { color: #22c55e; }
+    .record-amount.lose { color: #ef4444; }
+    .record-delete {
+      background: none;
+      border: none;
+      color: #ccc;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 4px 8px;
+      margin-left: 8px;
+    }
+    .record-delete:active { color: #ef4444; }
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #bbb;
+      font-size: 15px;
+    }
+
+    /* Bottom nav */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 480px;
+      background: #fff;
+      border-top: 1px solid #eee;
+      display: flex;
+      z-index: 100;
+    }
+    .nav-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px 0 14px;
+      cursor: pointer;
+      border: none;
+      background: none;
+      color: #bbb;
+      font-size: 11px;
+      gap: 4px;
+    }
+    .nav-item.active { color: #667eea; }
+    .nav-icon { font-size: 22px; }
+
+    /* Pages */
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* Stats page */
+    .period-tabs {
+      display: flex;
+      margin: 16px;
+      background: #eee;
+      border-radius: 10px;
+      padding: 3px;
+    }
+    .period-tab {
+      flex: 1;
+      text-align: center;
+      padding: 8px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      background: none;
+      color: #888;
+    }
+    .period-tab.active {
+      background: #fff;
+      color: #667eea;
+      font-weight: 600;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin: 0 16px 16px;
+    }
+    .stat-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 14px;
+    }
+    .stat-card .s-label { font-size: 12px; color: #888; margin-bottom: 4px; }
+    .stat-card .s-value { font-size: 22px; font-weight: 700; }
+    .stat-card .s-value.win { color: #22c55e; }
+    .stat-card .s-value.lose { color: #ef4444; }
+    .stat-card .s-value.neutral { color: #667eea; }
+    .chart-container {
+      background: #fff;
+      margin: 0 16px 16px;
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .chart-container canvas { max-height: 220px; }
+
+    /* Settings page */
+    .settings-section {
+      margin: 16px;
+      background: #fff;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .settings-item {
+      display: flex;
+      align-items: center;
+      padding: 16px;
+      border-bottom: 1px solid #f5f5f5;
+      cursor: pointer;
+      gap: 12px;
+    }
+    .settings-item:last-child { border-bottom: none; }
+    .settings-item:active { background: #f9f9f9; }
+    .settings-icon { font-size: 22px; }
+    .settings-text .s-title { font-size: 15px; font-weight: 500; }
+    .settings-text .s-desc { font-size: 12px; color: #888; margin-top: 2px; }
+    .settings-item.danger .s-title { color: #ef4444; }
+
+    /* Modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 200;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: #fff;
+      border-radius: 20px 20px 0 0;
+      padding: 24px 20px 40px;
+      width: 100%;
+      max-width: 480px;
+    }
+    .modal h2 { font-size: 18px; font-weight: 700; margin-bottom: 20px; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 13px; color: #888; margin-bottom: 6px; font-weight: 500; }
+    .form-group input {
+      width: 100%;
+      border: 1.5px solid #eee;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 16px;
+      outline: none;
+    }
+    .form-group input:focus { border-color: #667eea; }
+    .amount-hint { font-size: 12px; color: #888; margin-top: 4px; }
+    .modal-btns { display: flex; gap: 10px; margin-top: 20px; }
+    .btn-cancel {
+      flex: 1;
+      padding: 14px;
+      border: 1.5px solid #eee;
+      border-radius: 12px;
+      background: #fff;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    .btn-save {
+      flex: 2;
+      padding: 14px;
+      border: none;
+      border-radius: 12px;
+      background: #667eea;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-save:active { opacity: 0.85; }
+  </style>
+</head>
+<body>
+
+<!-- Page: Records -->
+<div id="page-records" class="page active">
+  <div class="header">
+    <h1>麻将记账</h1>
+    <div class="subtitle" id="header-subtitle">本月收支</div>
+  </div>
+  <div class="summary-card" id="summary-card">
+    <div class="label">本月净收益</div>
+    <div class="amount" id="month-total">¥0</div>
+    <div class="meta">
+      <span id="month-games">0 局</span>
+      <span id="month-winrate">胜率 0%</span>
+    </div>
+  </div>
+  <button class="add-btn" onclick="openModal()">+ 新增记录</button>
+  <div class="section-title">最近记录</div>
+  <div id="records-list"></div>
+</div>
+
+<!-- Page: Stats -->
+<div id="page-stats" class="page">
+  <div class="header">
+    <h1>统计</h1>
+  </div>
+  <div class="period-tabs">
+    <button class="period-tab active" onclick="setPeriod('week', this)">本周</button>
+    <button class="period-tab" onclick="setPeriod('month', this)">本月</button>
+    <button class="period-tab" onclick="setPeriod('year', this)">本年</button>
+  </div>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="s-label">净收益</div>
+      <div class="s-value neutral" id="stat-net">¥0</div>
+    </div>
+    <div class="stat-card">
+      <div class="s-label">总局数</div>
+      <div class="s-value neutral" id="stat-games">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="s-label">赢钱局数</div>
+      <div class="s-value win" id="stat-wins">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="s-label">胜率</div>
+      <div class="s-value neutral" id="stat-winrate">0%</div>
+    </div>
+    <div class="stat-card">
+      <div class="s-label">最大单次赢</div>
+      <div class="s-value win" id="stat-maxwin">¥0</div>
+    </div>
+    <div class="stat-card">
+      <div class="s-label">最大单次输</div>
+      <div class="s-value lose" id="stat-maxlose">¥0</div>
+    </div>
+  </div>
+  <div class="chart-container">
+    <canvas id="myChart"></canvas>
+  </div>
+</div>
+
+<!-- Page: Settings -->
+<div id="page-settings" class="page">
+  <div class="header">
+    <h1>设置</h1>
+  </div>
+  <div class="settings-section">
+    <div class="settings-item" onclick="exportData()">
+      <span class="settings-icon">📤</span>
+      <div class="settings-text">
+        <div class="s-title">导出数据</div>
+        <div class="s-desc">将所有记录导出为 JSON 文件</div>
+      </div>
+    </div>
+    <div class="settings-item" onclick="document.getElementById('import-input').click()">
+      <span class="settings-icon">📥</span>
+      <div class="settings-text">
+        <div class="s-title">导入数据</div>
+        <div class="s-desc">从 JSON 文件恢复记录</div>
+      </div>
+    </div>
+  </div>
+  <div class="settings-section">
+    <div class="settings-item danger" onclick="clearData()">
+      <span class="settings-icon">🗑️</span>
+      <div class="settings-text">
+        <div class="s-title">清空所有数据</div>
+        <div class="s-desc">删除全部记录，不可恢复</div>
+      </div>
+    </div>
+  </div>
+  <input type="file" id="import-input" accept=".json" style="display:none" onchange="importData(event)">
+</div>
+
+<!-- Bottom Nav -->
+<nav class="bottom-nav">
+  <button class="nav-item active" id="nav-records" onclick="showPage('records')">
+    <span class="nav-icon">📋</span>记录
+  </button>
+  <button class="nav-item" id="nav-stats" onclick="showPage('stats')">
+    <span class="nav-icon">📊</span>统计
+  </button>
+  <button class="nav-item" id="nav-settings" onclick="showPage('settings')">
+    <span class="nav-icon">⚙️</span>设置
+  </button>
+</nav>
+
+<!-- Add Record Modal -->
+<div class="modal-overlay" id="modal" onclick="closeModalOutside(event)">
+  <div class="modal">
+    <h2>新增记录</h2>
+    <div class="form-group">
+      <label>日期</label>
+      <input type="date" id="input-date">
+    </div>
+    <div class="form-group">
+      <label>金额</label>
+      <input type="number" id="input-amount" placeholder="赢钱填正数，输钱填负数" inputmode="numeric">
+      <div class="amount-hint">例：赢了150填 150，输了80填 -80</div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal()">取消</button>
+      <button class="btn-save" onclick="saveRecord()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---- Data ----
+function getRecords() {
+  try { return JSON.parse(localStorage.getItem('mj_records') || '[]'); } catch { return []; }
+}
+function saveRecords(records) {
+  localStorage.setItem('mj_records', JSON.stringify(records));
+}
+function genId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
+// ---- Navigation ----
+let currentPage = 'records';
+let chartInstance = null;
+let currentPeriod = 'month';
+
+function showPage(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  document.getElementById('nav-' + page).classList.add('active');
+  currentPage = page;
+  if (page === 'records') renderRecords();
+  if (page === 'stats') renderStats();
+}
+
+// ---- Records Page ----
+function renderRecords() {
+  const records = getRecords();
+  const now = new Date();
+  const monthRecords = records.filter(r => {
+    const d = new Date(r.date);
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  });
+  const total = monthRecords.reduce((s, r) => s + r.amount, 0);
+  const wins = monthRecords.filter(r => r.amount > 0).length;
+  const winrate = monthRecords.length ? Math.round(wins / monthRecords.length * 100) : 0;
+
+  document.getElementById('month-total').textContent = formatAmount(total);
+  document.getElementById('month-total').style.color = total >= 0 ? '#fff' : 'rgba(255,255,255,0.85)';
+  document.getElementById('month-games').textContent = monthRecords.length + ' 局';
+  document.getElementById('month-winrate').textContent = '胜率 ' + winrate + '%';
+
+  const sorted = [...records].sort((a, b) => b.date.localeCompare(a.date));
+  const list = document.getElementById('records-list');
+  if (sorted.length === 0) {
+    list.innerHTML = '<div class="empty-state">还没有记录<br>点击上方按钮添加第一局</div>';
+    return;
+  }
+  list.innerHTML = sorted.map(r => `
+    <div class="record-item">
+      <div>
+        <div class="record-date">${formatDate(r.date)}</div>
+      </div>
+      <div style="display:flex;align-items:center">
+        <span class="record-amount ${r.amount >= 0 ? 'win' : 'lose'}">${formatAmount(r.amount)}</span>
+        <button class="record-delete" onclick="deleteRecord('${r.id}')">×</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function deleteRecord(id) {
+  if (!confirm('确认删除这条记录？')) return;
+  const records = getRecords().filter(r => r.id !== id);
+  saveRecords(records);
+  renderRecords();
+}
+
+// ---- Modal ----
+function openModal() {
+  document.getElementById('input-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('input-amount').value = '';
+  document.getElementById('modal').classList.add('open');
+  setTimeout(() => document.getElementById('input-amount').focus(), 300);
+}
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+function closeModalOutside(e) {
+  if (e.target === document.getElementById('modal')) closeModal();
+}
+function saveRecord() {
+  const date = document.getElementById('input-date').value;
+  const amountStr = document.getElementById('input-amount').value.trim();
+  if (!date) { alert('请选择日期'); return; }
+  if (amountStr === '' || isNaN(amountStr)) { alert('请输入有效金额'); return; }
+  const amount = parseInt(amountStr, 10);
+  if (amount === 0) { alert('金额不能为0'); return; }
+  const records = getRecords();
+  records.push({ id: genId(), date, amount });
+  saveRecords(records);
+  closeModal();
+  renderRecords();
+}
+
+// ---- Stats Page ----
+function setPeriod(period, btn) {
+  currentPeriod = period;
+  document.querySelectorAll('.period-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  renderStats();
+}
+
+function getFilteredRecords(period) {
+  const records = getRecords();
+  const now = new Date();
+  return records.filter(r => {
+    const d = new Date(r.date);
+    if (period === 'week') {
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay() + 1);
+      startOfWeek.setHours(0,0,0,0);
+      return d >= startOfWeek;
+    }
+    if (period === 'month') {
+      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    }
+    if (period === 'year') {
+      return d.getFullYear() === now.getFullYear();
+    }
+    return true;
+  });
+}
+
+function renderStats() {
+  const records = getFilteredRecords(currentPeriod);
+  const net = records.reduce((s, r) => s + r.amount, 0);
+  const wins = records.filter(r => r.amount > 0);
+  const loses = records.filter(r => r.amount < 0);
+  const winrate = records.length ? Math.round(wins.length / records.length * 100) : 0;
+  const maxWin = wins.length ? Math.max(...wins.map(r => r.amount)) : 0;
+  const maxLose = loses.length ? Math.min(...loses.map(r => r.amount)) : 0;
+
+  document.getElementById('stat-net').textContent = formatAmount(net);
+  document.getElementById('stat-net').className = 's-value ' + (net > 0 ? 'win' : net < 0 ? 'lose' : 'neutral');
+  document.getElementById('stat-games').textContent = records.length;
+  document.getElementById('stat-wins').textContent = wins.length;
+  document.getElementById('stat-winrate').textContent = winrate + '%';
+  document.getElementById('stat-maxwin').textContent = '¥' + maxWin;
+  document.getElementById('stat-maxlose').textContent = maxLose < 0 ? '-¥' + Math.abs(maxLose) : '¥0';
+
+  renderChart(records);
+}
+
+function renderChart(records) {
+  const ctx = document.getElementById('myChart').getContext('2d');
+  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+  if (records.length === 0) return;
+
+  // Group by date, accumulate
+  const sorted = [...records].sort((a, b) => a.date.localeCompare(b.date));
+  const dateMap = {};
+  sorted.forEach(r => {
+    dateMap[r.date] = (dateMap[r.date] || 0) + r.amount;
+  });
+  const labels = Object.keys(dateMap).map(d => d.slice(5)); // MM-DD
+  const data = Object.values(dateMap);
+
+  // Cumulative line
+  const cumulative = [];
+  let sum = 0;
+  data.forEach(v => { sum += v; cumulative.push(sum); });
+
+  chartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          type: 'bar',
+          label: '单次收益',
+          data,
+          backgroundColor: data.map(v => v >= 0 ? 'rgba(34,197,94,0.6)' : 'rgba(239,68,68,0.6)'),
+          borderRadius: 4,
+          yAxisID: 'y',
+        },
+        {
+          type: 'line',
+          label: '累计收益',
+          data: cumulative,
+          borderColor: '#667eea',
+          backgroundColor: 'rgba(102,126,234,0.1)',
+          borderWidth: 2,
+          pointRadius: 3,
+          fill: true,
+          tension: 0.3,
+          yAxisID: 'y',
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: true, position: 'bottom', labels: { font: { size: 11 } } } },
+      scales: {
+        y: { ticks: { callback: v => '¥' + v } }
+      }
+    }
+  });
+}
+
+// ---- Backup ----
+function exportData() {
+  const records = getRecords();
+  const data = JSON.stringify({ records, exportedAt: new Date().toISOString() }, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'mahjong-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.records || !Array.isArray(data.records)) throw new Error('格式错误');
+      if (!confirm(`导入 ${data.records.length} 条记录？这将覆盖现有数据。`)) return;
+      saveRecords(data.records);
+      alert('导入成功！');
+      renderRecords();
+    } catch {
+      alert('文件格式错误，请选择正确的备份文件');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function clearData() {
+  if (!confirm('确认清空所有数据？此操作不可恢复！')) return;
+  localStorage.removeItem('mj_records');
+  renderRecords();
+  alert('已清空所有数据');
+}
+
+// ---- Helpers ----
+function formatAmount(amount) {
+  if (amount >= 0) return '¥' + amount;
+  return '-¥' + Math.abs(amount);
+}
+function formatDate(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.getFullYear() + '年' + (d.getMonth()+1) + '月' + d.getDate() + '日';
+}
+
+// ---- Init ----
+renderRecords();
+</script>
+</body>
+</html>
